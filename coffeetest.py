@@ -2,16 +2,25 @@ import os
 import re
 import random
 import requests
+
+from dotenv import load_dotenv
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     ConversationHandler, ContextTypes, filters
 )
+import sys
+sys.path.append("/path/to/where/python-dotenv/is/installed")
 
-# Environment variables
-BOT_TOKEN = os.getenv("7644072446:AAGXxzcK_Zy1DHr5SaEdRJSPWtdHPhQU0HU")
-POSTER_TOKEN = os.getenv("664212:0943952407a90a0dffb58c7903984f19")
+# Load environment variables
+load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+POSTER_TOKEN = os.getenv("POSTER_TOKEN")
 POSTER_DOMAIN = "coffee-n-1.joinposter.com"
+
+# Check for required tokens
+if not BOT_TOKEN or not POSTER_TOKEN:
+    raise Exception("❌ BOT_TOKEN or POSTER_TOKEN not set in .env file or environment.")
 
 # States
 LANG, MENU, NAME, SURNAME, PHONE, VERIFY_CODE, GENDER, SIGN_PHONE, SIGN_VERIFY = range(9)
@@ -19,6 +28,7 @@ LANG, MENU, NAME, SURNAME, PHONE, VERIFY_CODE, GENDER, SIGN_PHONE, SIGN_VERIFY =
 user_lang = {}
 verification_data = {}
 
+# Language texts
 def get_text(key, lang):
     texts = {
         'welcome': {'uz': "🇺🇿 Coffee Way sodiqlik dasturiga xush kelibsiz!", 'ru': "🇷🇺 Добро пожаловать в программу лояльности Coffee Way!"},
@@ -39,6 +49,8 @@ def get_text(key, lang):
     return texts[key][lang]
 
 gender_options = {'uz': ['Erkak', 'Ayol'], 'ru': ['Мужчина', 'Женщина']}
+
+# --- Conversation handlers ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [["🇺🇿 O'zbek"], ["🇷🇺 Русский"]]
@@ -200,14 +212,13 @@ async def show_balance(update: Update, lang, cleaned_phone):
     if "response" in response and response['response']:
         client = response['response'][0]
         bonus = int(client.get('bonus', '0')) // 100
-        await update.message.reply_text(get_text('bonus_balance', lang).format(bonus), reply_markup=ReplyKeyboardMarkup([["/start"]], resize_keyboard=True))
+        await update.message.reply_text(get_text('bonus_balance', lang).format(bonus),
+                                        reply_markup=ReplyKeyboardMarkup([["/start"]], resize_keyboard=True))
     else:
         await update.message.reply_text(get_text('not_registered', lang))
 
+# --- Main Bot Execution ---
 def main():
-    if not BOT_TOKEN or not POSTER_TOKEN:
-        raise Exception("❌ BOT_TOKEN or POSTER_TOKEN not set in environment variables.")
-    
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
