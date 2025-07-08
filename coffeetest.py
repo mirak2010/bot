@@ -9,14 +9,18 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     ConversationHandler, ContextTypes, filters
 )
-import sys
-sys.path.append("/path/to/where/python-dotenv/is/installed")
 
 # Load environment variables
-load_dotenv()
+# Change this path if your .env file is not in the same folder as this script
+load_dotenv()  # or load_dotenv(dotenv_path="/absolute/path/to/.env")
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 POSTER_TOKEN = os.getenv("POSTER_TOKEN")
 POSTER_DOMAIN = "coffee-n-1.joinposter.com"
+
+# Debug print to verify .env loading
+print("BOT_TOKEN:", BOT_TOKEN)
+print("POSTER_TOKEN:", POSTER_TOKEN)
 
 # Check for required tokens
 if not BOT_TOKEN or not POSTER_TOKEN:
@@ -51,7 +55,6 @@ def get_text(key, lang):
 gender_options = {'uz': ['Erkak', 'Ayol'], 'ru': ['Мужчина', 'Женщина']}
 
 # --- Conversation handlers ---
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [["🇺🇿 O'zbek"], ["🇷🇺 Русский"]]
     await update.message.reply_text("🇺🇿 Iltimos, tilni tanlang:\n🇷🇺 Пожалуйста, выберите язык:",
