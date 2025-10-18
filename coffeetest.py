@@ -11,28 +11,22 @@ from telegram.ext import (
 )
 
 # Load environment variables
-# Change this path if your .env file is not in the same folder as this script
-load_dotenv()  # or load_dotenv(dotenv_path="/absolute/path/to/.env")
-
+load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 POSTER_TOKEN = os.getenv("POSTER_TOKEN")
 POSTER_DOMAIN = "coffee-n-1.joinposter.com"
 
-# Debug print to verify .env loading
 print("BOT_TOKEN:", BOT_TOKEN)
 print("POSTER_TOKEN:", POSTER_TOKEN)
 
-# Check for required tokens
 if not BOT_TOKEN or not POSTER_TOKEN:
     raise Exception("❌ BOT_TOKEN or POSTER_TOKEN not set in .env file or environment.")
 
-# States
 LANG, MENU, NAME, SURNAME, PHONE, VERIFY_CODE, GENDER, SIGN_PHONE, SIGN_VERIFY = range(9)
 
 user_lang = {}
 verification_data = {}
 
-# Language texts
 def get_text(key, lang):
     texts = {
         'welcome': {'uz': "🇺🇿 Coffee Way sodiqlik dasturiga xush kelibsiz!", 'ru': "🇷🇺 Добро пожаловать в программу лояльности Coffee Way!"},
@@ -57,8 +51,10 @@ gender_options = {'uz': ['Erkak', 'Ayol'], 'ru': ['Мужчина', 'Женщи�
 # --- Conversation handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [["🇺🇿 O'zbek"], ["🇷🇺 Русский"]]
-    await update.message.reply_text("🇺🇿 Iltimos, tilni tanlang:\n🇷🇺 Пожалуйста, выберите язык:",
-        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True))
+    await update.message.reply_text(
+        "🇺🇿 Iltimos, tilni tanlang:\n🇷🇺 Пожалуйста, выберите язык:",
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+    )
     return LANG
 
 async def select_lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -69,6 +65,7 @@ async def select_lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🇷🇺 Русский":
         user_lang[user_id] = 'ru'
     else:
+        await update.message.reply_text("❌ Tilni tanlang: 🇺🇿 yoki 🇷🇺")
         return LANG
 
     lang = user_lang[user_id]
@@ -108,9 +105,15 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(get_text('invalid_phone', lang))
         return PHONE
 
-    cleaned_phone = phone.replace('+', '').replace(' ', '')
-    url = f"https://{POSTER_DOMAIN}/api/clients.getClients?token={POSTER_TOKEN}&phone={cleaned_phone}"
-    response = requests.get(url).json()
+    cleaned_phone = phone.replace('+', '')
+    try:
+        response = requests.get(f"https://{POSTER_DOMAIN}/api/clients.getClients", params={
+            "token": POSTER_TOKEN, "phone": cleaned_phone
+        }, timeout=5).json()
+    except Exception:
+        await update.message.reply_text("❌ Tarmoqda xatolik. Qaytadan urinib ko‘ring.")
+        return ConversationHandler.END
+
     if "response" in response and response['response']:
         await update.message.reply_text(get_text('duplicate_phone', lang))
         return PHONE
@@ -153,18 +156,24 @@ async def get_gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return GENDER
 
     client_sex = '1' if gender in ['Erkak', 'Мужчина'] else '2'
-    phone = context.user_data['phone'].replace('+', '').replace(' ', '')
+    phone = context.user_data['phone'].replace('+', '')
 
-    payload = {
-        'client_name': context.user_data['name'],
-        'client_surname': context.user_data['surname'],
-        'phone': phone,
-        'client_sex': client_sex,
-        'client_groups_id_client': '2',
-        'loyalty_type': '1'
-    }
-    url = f"https://{POSTER_DOMAIN}/api/clients.createClient?token={POSTER_TOKEN}"
-    response = requests.post(url, data=payload).json()
+    try:
+        response = requests.post(
+            f"https://{POSTER_DOMAIN}/api/clients.createClient?token={POSTER_TOKEN}",
+            data={
+                'client_name': context.user_data['name'],
+                'client_surname': context.user_data['surname'],
+                'phone': phone,
+                'client_sex': client_sex,
+                'client_groups_id_client': '2',
+                'loyalty_type': '1'
+            },
+            timeout=5
+        ).json()
+    except Exception:
+        await update.message.reply_text("❌ Tarmoqda xatolik.")
+        return ConversationHandler.END
 
     if "response" in response:
         await update.message.reply_text(get_text('thanks', lang))
@@ -180,7 +189,7 @@ async def sign_in_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(get_text('invalid_phone', lang))
         return SIGN_PHONE
 
-    cleaned_phone = phone.replace('+', '').replace(' ', '')
+    cleaned_phone = phone.replace('+', '')
     code = str(random.randint(100000, 999999))
     verification_data[update.effective_user.id] = {'code': code, 'attempts': 0, 'phone': cleaned_phone}
     await update.message.reply_text(get_text('sent_code', lang).format(code))
@@ -210,8 +219,14 @@ async def sign_verify(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return SIGN_VERIFY
 
 async def show_balance(update: Update, lang, cleaned_phone):
-    url = f"https://{POSTER_DOMAIN}/api/clients.getClients?token={POSTER_TOKEN}&phone={cleaned_phone}"
-    response = requests.get(url).json()
+    try:
+        response = requests.get(f"https://{POSTER_DOMAIN}/api/clients.getClients", params={
+            "token": POSTER_TOKEN, "phone": cleaned_phone
+        }, timeout=5).json()
+    except Exception:
+        await update.message.reply_text("❌ Tarmoqda xatolik.")
+        return
+
     if "response" in response and response['response']:
         client = response['response'][0]
         bonus = int(client.get('bonus', '0')) // 100
@@ -220,7 +235,6 @@ async def show_balance(update: Update, lang, cleaned_phone):
     else:
         await update.message.reply_text(get_text('not_registered', lang))
 
-# --- Main Bot Execution ---
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     conv = ConversationHandler(
